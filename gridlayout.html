@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Grid Drag-and-Drop</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; display: flex; height: 100vh; font-family: sans-serif; }
+
+    #sidebar {
+      width: 220px;
+      background: #f0f0f0;
+      padding: 10px;
+      border-right: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      overflow-y: auto;
+    }
+
+    .config-group {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+
+    label {
+      font-size: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 5px;
+    }
+
+    button {
+      padding: 8px;
+      background: #333;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    .piece {
+      margin: 5px 0;
+      cursor: grab;
+      border: 2px solid #555;
+      display: inline-block;
+    }
+
+    #canvas-container {
+      flex-grow: 1;
+      position: relative;
+      background: black;
+      overflow: hidden;
+    }
+
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+
+    #grid-canvas {
+      z-index: 0;
+    }
+
+    .draggable {
+      position: absolute;
+      z-index: 1;
+      cursor: grab;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <div class="config-group">
+      <label for="gridWidth">Grid Width</label>
+      <input type="number" id="gridWidth" value="14" min="1" />
+      <label for="gridHeight">Grid Height</label>
+      <input type="number" id="gridHeight" value="18" min="1" />
+      <button id="applyGrid">Apply Grid Size</button>
+    </div>
+
+    <h3>Pieces</h3>
+    <!-- Sizes in grid units, will be scaled by unitSize -->
+    <div class="piece" style="background: red;" data-width="3" data-height="3"></div>
+    <div class="piece" style="background: blue;" data-width="3" data-height="3"></div>
+    <div class="piece" style="background: green;" data-width="2" data-height="2"></div>
+    <div class="piece" style="background: orange;" data-width="2" data-height="3"></div>
+    <div class="piece" style="background: purple;" data-width="3" data-height="2"></div>
+  </div>
+
+  <div id="canvas-container">
+    <canvas id="grid-canvas"></canvas>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('grid-canvas');
+    const ctx = canvas.getContext('2d');
+    const container = document.getElementById('canvas-container');
+    const unitSize = 40; // Shared unit size for grid and pieces
+    const previewUnitSize = 20; // For the sidebar piece preview size
+
+    let gridWidth = parseInt(document.getElementById('gridWidth').value);
+    let gridHeight = parseInt(document.getElementById('gridHeight').value);
+
+    function drawGrid() {
+      canvas.width = gridWidth * unitSize;
+      canvas.height = gridHeight * unitSize;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.strokeStyle = '#666';
+
+      for (let x = 0; x <= canvas.width; x += unitSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, canvas.height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= canvas.height; y += unitSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
+      }
+    }
+
+    function resizeSidebarPieces() {
+      document.querySelectorAll('.piece').forEach(piece => {
+        const w = parseInt(piece.dataset.width);
+        const h = parseInt(piece.dataset.height);
+        piece.style.width = `${w * previewUnitSize}px`;
+        piece.style.height = `${h * previewUnitSize}px`;
+      });
+    }
+
+    drawGrid();
+    resizeSidebarPieces();
+
+    document.getElementById('applyGrid').addEventListener('click', () => {
+      gridWidth = parseInt(document.getElementById('gridWidth').value);
+      gridHeight = parseInt(document.getElementById('gridHeight').value);
+      drawGrid();
+    });
+
+    // Drag and drop logic
+    let dragged = null;
+    let offsetX, offsetY;
+
+    function initDragEvents(element) {
+      element.addEventListener('mousedown', e => {
+        const rect = element.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        dragged = element;
+      });
+    }
+
+    document.querySelectorAll('.piece').forEach(piece => {
+      piece.addEventListener('mousedown', e => {
+        const clone = piece.cloneNode(true);
+        const rect = piece.getBoundingClientRect();
+        offsetX = e.clientX - rect.left;
+        offsetY = e.clientY - rect.top;
+        clone.classList.add('draggable');
+
+        // Use the real unitSize for the dragged piece
+        const w = parseInt(clone.dataset.width);
+        const h = parseInt(clone.dataset.height);
+        clone.style.width = `${w * unitSize}px`;
+        clone.style.height = `${h * unitSize}px`;
+        clone.style.left = `${e.clientX - offsetX - container.getBoundingClientRect().left}px`;
+        clone.style.top = `${e.clientY - offsetY - container.getBoundingClientRect().top}px`;
+
+        container.appendChild(clone);
+        initDragEvents(clone);
+        dragged = clone;
+      });
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (dragged) {
+        const containerRect = container.getBoundingClientRect();
+        dragged.style.left = `${e.clientX - offsetX - containerRect.left}px`;
+        dragged.style.top = `${e.clientY - offsetY - containerRect.top}px`;
+      }
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (dragged) {
+        const containerRect = container.getBoundingClientRect();
+        let x = parseInt(dragged.style.left);
+        let y = parseInt(dragged.style.top);
+
+        // Check if inside bounds
+        if (
+          x + dragged.offsetWidth < 0 ||
+          y + dragged.offsetHeight < 0 ||
+          x > canvas.width ||
+          y > canvas.height
+        ) {
+          dragged.remove(); // Delete if outside
+        } else {
+          // Snap to grid
+          x = Math.round(x / unitSize) * unitSize;
+          y = Math.round(y / unitSize) * unitSize;
+          dragged.style.left = `${x}px`;
+          dragged.style.top = `${y}px`;
+        }
+
+        dragged = null;
+      }
+    });
+  </script>
+</body>
+</html>
+
